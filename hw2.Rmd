@@ -1,0 +1,155 @@
+---
+title: "hw2"
+output: html_document
+date: '2022-04-09'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(tidymodels)
+library(corrplot)
+library(ggthemes)
+tidymodels_prefer()
+library(readr)
+abalone <- read_csv("abalone.csv")
+set.seed(150)
+```
+
+#### Q1:
+
+```{r}
+abalone %>% 
+  head()
+abalone["age"] <- abalone["rings"] + 1.5
+head(abalone)
+ggplot(abalone, aes(x = age)) + geom_histogram()
+```
+
+From the plot, we can tell that  distribution of age has a left-skewed distribution, and  most of the points are centered around age 11.
+
+
+#### Q2:
+```{r}
+abalone_split <- initial_split(abalone, prop = 0.80,strata = age)
+abalone_train <- training(abalone_split)
+abalone_test <- testing(abalone_split)
+```
+
+
+#### Q3:
+```{r}
+
+abalone_recipe = recipe(age ~ type + longest_shell + diameter + height + whole_weight + shucked_weight + viscera_weight + shell_weight, data=abalone_train) %>%
+step_dummy(all_nominal_predictors()) %>%
+  
+step_interact( ~ starts_with("type"):shucked_weight) %>%
+step_interact( ~ longest_shell:diameter) %>%
+step_interact( ~ shucked_weight:shell_weight) %>%
+  
+  
+step_center(all_numeric_predictors()) %>%
+step_scale(all_numeric_predictors())
+
+abalone_recipe
+
+```
+
+The reason why we dont use rings in predicting age is that the variable age and ring is related which is ring *1.5=age. If we utilize the ring in modle, the other variable will be meaningless.
+
+#### Q4:
+```{r}
+lm_model <-linear_reg() %>%
+ set_engine("lm")
+```
+#### Q5:
+```{r}
+abalone_workflow = workflow() %>%
+add_model(lm_model) %>%
+add_recipe(abalone_recipe)
+```
+#### Q6:
+```{r}
+abalone_fit = abalone_workflow %>%
+fit(abalone_train)
+```
+
+```{r}
+hypothetical_sample <- data.frame(longest_shell=0.50,
+                            diameter=0.10,
+                            height=0.30,
+                            whole_weight=4,
+                            shucked_weight=1,
+                            viscera_weight=2,
+                            shell_weight=1,
+                            type="F")
+predict(abalone_fit, hypothetical_sample)
+```
+
+
+#### Q7:
+```{r}
+abalone_metrics = metric_set(rsq, rmse, mae)
+abalone_train_res <-predict(abalone_fit,new_data=abalone_train%>%select(-age))
+abalone_train_res <- bind_cols(abalone_train_res,abalone_train%>%select(age))
+
+
+abalone_metrics(abalone_train_res, truth = age,estimate = .pred)
+```
+
+Based on the test, the r-squared measures how good the predictor variable related to response variable. In my model, r-squared value is 0.5407202 which means about 54% of the variability in the response is explained by the predictor variable. Therefore, the model is not good to predict the response variable. 
+
+
+
+
+#### Q8:
+
+The irreducible error is $Var(\epsilon)$
+
+The reducible error are $[Bias(\hat{f}(x_0))]^2$ and $Var(\hat{f}(x_0))$ 
+#### Q9:
+Based on the general bias-variance tradeoff formula, we can get that $[Bias(\hat{f}(x_0))]^2 \ge0$ and $Var(\hat{f}(x_0))\ge0$
+
+Therefore, we can conclude that the expected test error is always at least as large as the irreducible error.
+
+
+#### Q10:
+
+we assume that $Y = f(X) + \epsilon$ and $E[\epsilon] = 0$ and $Var(\epsilon) = \sigma^2_\epsilon$
+and we use $\hat f(x_0) = \hat f$ ,$f(x_0) = f$, we can recall from previous pstat class that $E[f] = f$ and $E[Y] = f$
+
+
+$E[(Y - \hat f)^2 ] = E[(Y - f + f - \hat f )^2]$
+
+$= E[(y - f)^2] + E[(f - \hat f)^2] + 2 E[(f - \hat f)(y - f)]$
+
+$= 	E[(f + \epsilon - f)^2] + E[(f - \hat f)^2]  + 2E[fY - f^2 - \hat f Y + \hat f f]$
+
+
+$= E[\epsilon^2] + E[(f - \hat f)^2] + 2( f^2 - f^2 - f E[\hat f] + f E[\hat f] )$
+
+
+$= \sigma^2_\epsilon + E[(f - \hat f)^2] +0$
+
+then
+
+$E[(f - \hat f)^2]  = E[(f + E[\hat f] - E[\hat f] - \hat f)^2]$
+
+$= E \left[ f - E[\hat f] \right]^2 + E\left[ \hat f - E[ \hat f] \right]^2$
+
+$= \left[ f - E[\hat f] \right]^2 + E\left[ \hat f - E[ \hat f] \right]^2$
+
+$= Bias^2[\hat f] + Var[\hat f]$
+
+Therefor, we putting it together and get
+
+$E[ (Y - \hat f)^2 ]  =  \sigma^2_\epsilon + Bias^2[\hat f] + Var[\hat f]$
+
+
+
+
